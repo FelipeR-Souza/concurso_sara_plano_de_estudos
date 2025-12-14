@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plano de Estudo Interativo: Concurso</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Application Configuration & Comments -->
+    <!-- Chosen Palette: Warm Neutrals (Stone) background, with specific discipline colors: 
+         - Portuguese: Emerald (Growth/Language)
+         - Math: Blue (Logic/Cool)
+         - Electrical: Amber (Energy/Caution) -->
+    
+    <!-- Application Structure Plan: 
+         1. Header: Global progress summary.
+         2. Dashboard: Visual analytics showing the weight of subjects and current study velocity using Chart.js.
+         3. Study Deck: A tabbed interface allowing deep dives into each subject.
+            - Inside each tab, topics are "agglomerated" into logical clusters (e.g., Geometry, Syntax, Maintenance).
+            - Each item acts as a "To-Do" with a specific action: "Find Class".
+         4. Interaction Flow: User sees overview -> Selects Subject -> Expands Cluster -> Marks Topic Complete -> Progress Updates instantly.
+    -->
+
+    <!-- Visualization & Content Choices:
+         - Subject Distribution (Pie Chart): Shows the volume of content per subject. Goal: Inform user of study load balance.
+         - Progress Tracking (Bar Chart): Compares 'To Do' vs 'Done' per subject. Goal: Motivation and gap analysis.
+         - Interactive Lists (HTML/JS): The core content. Uses standard HTML form elements styled with Tailwind for accessibility and ease of use.
+         - Resource Finder (Button): Replaces static links with dynamic search query generation. Goal: Utility.
+    -->
+
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f5f5f4; /* Stone 100 */
+            color: #1c1917; /* Stone 900 */
+        }
+
+        /* Chart Container Styling - Mandatory Requirements */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e7e5e4;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a8a29e;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #78716c;
+        }
+
+        .check-anim {
+            transition: all 0.2s ease-in-out;
+        }
+        .check-anim:checked {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+
+    <!-- Main App Container -->
+    <div id="app" class="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Header Section -->
+        <header class="mb-8 text-center sm:text-left border-b border-stone-300 pb-6">
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div>
+                    <h1 class="text-3xl sm:text-4xl font-bold text-stone-800 tracking-tight">
+                        Painel de Aprovação
+                    </h1>
+                    <p class="mt-2 text-stone-600 max-w-2xl">
+                        Gerenciador de estudos estratégico para o concurso. Acompanhe seu progresso nas três áreas fundamentais: Português, Matemática e Conhecimentos Específicos (Eletrotécnica).
+                    </p>
+                </div>
+                
+                <!-- Global Progress Card -->
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-stone-200 flex items-center gap-4 min-w-[200px]">
+                    <div class="text-right">
+                        <p class="text-sm text-stone-500 font-medium">Progresso Total</p>
+                        <p class="text-3xl font-bold text-stone-800" id="global-percent">0%</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-full border-4 border-stone-200 border-t-emerald-500 animate-spin-slow" id="global-spinner"></div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dashboard Section -->
+        <section id="dashboard" class="mb-10">
+            <div class="mb-4">
+                <h2 class="text-xl font-semibold text-stone-800 flex items-center gap-2">
+                    <span class="text-stone-400">📊</span> Visão Geral do Conteúdo
+                </h2>
+                <p class="text-sm text-stone-500">
+                    Visualize a distribuição do conteúdo programático e seu desempenho atual. Utilize estes gráficos para identificar quais áreas precisam de mais atenção e equilibrar seu ritmo de estudo.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Chart 1: Distribution -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+                    <h3 class="text-lg font-medium text-stone-700 mb-4 text-center">Peso das Disciplinas (Qtd. Tópicos)</h3>
+                    <div class="chart-container">
+                        <canvas id="distributionChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 2: Progress -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+                    <h3 class="text-lg font-medium text-stone-700 mb-4 text-center">Status de Conclusão por Área</h3>
+                    <div class="chart-container">
+                        <canvas id="progressChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Study Deck Section -->
+        <section id="study-deck" class="bg-white rounded-3xl shadow-lg border border-stone-200 overflow-hidden">
+            
+            <!-- Intro for Study Deck -->
+            <div class="p-6 sm:p-8 bg-stone-50 border-b border-stone-200">
+                <h2 class="text-2xl font-bold text-stone-800 mb-2">📚 Cronograma de Estudos</h2>
+                <p class="text-stone-600">
+                    Abaixo está o conteúdo programático completo, organizado e aglomerado por temas similares para facilitar o aprendizado. Marque os tópicos conforme estuda e utilize o botão <strong>"Buscar Aula"</strong> para encontrar materiais de vídeo e texto instantaneamente no Google.
+                </p>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="flex flex-wrap border-b border-stone-200" id="tabs-container">
+                <!-- Tabs injected by JS -->
+            </div>
+
+            <!-- Tab Content -->
+            <div id="tab-content" class="p-4 sm:p-8 min-h-[500px]">
+                <!-- Dynamic Content injected by JS -->
+            </div>
+
+        </section>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-stone-100 border-t border-stone-200 mt-auto py-8">
+        <div class="max-w-7xl mx-auto px-4 text-center text-stone-500 text-sm">
+            <p>Gerado pelo Canvas Create Webapp &bull; Focado na sua Aprovação</p>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- DATA STRUCTURE (Source Report Parsed & Agglomerated) ---
+        const studyData = [
+            {
+                id: 'portugues',
+                title: 'I. Língua Portuguesa',
+                short: 'Português',
+                color: '#10b981', // Emerald 500
+                bg: 'bg-emerald-50',
+                border: 'border-emerald-200',
+                text: 'text-emerald-700',
+                btn: 'bg-emerald-600 hover:bg-emerald-700',
+                topics: [
+                    {
+                        category: "Compreensão e Tipologia Textual",
+                        items: [
+                            "1. Interpretação e compreensão de texto",
+                            "2. Organização estrutural dos textos e Coerência",
+                            "3. Marcas de textualidade: coesão e intertextualidade",
+                            "4. Modos de organização: descrição, narração, exposição, argumentação, injunção",
+                            "5. Tipos textuais: informativo, publicitário, propagandístico, normativo, didático",
+                            "6. Textos literários e não literários",
+                            "14. Tipos de discurso e Registros de linguagem (15)",
+                            "16. Funções da linguagem e Elementos da comunicação (17)"
+                        ]
+                    },
+                    {
+                        category: "Estrutura, Sintaxe e Gramática",
+                        items: [
+                            "7. Tipologia e Estrutura da frase portuguesa (8)",
+                            "9. Problemas estruturais e Norma culta (10)",
+                            "11. Pontuação e sinais gráficos",
+                            "12. Organização sintática: termos e orações",
+                            "13. Ordem direta e inversa",
+                            "26. A crase"
+                        ]
+                    },
+                    {
+                        category: "Morfologia e Formação",
+                        items: [
+                            "18. Estrutura e formação de palavras",
+                            "19. Formas de abreviação",
+                            "20. Classes de palavras (Substantivos, Verbos, Pronomes, Conjunções, etc.)"
+                        ]
+                    },
+                    {
+                        category: "Semântica e Vocabulário",
+                        items: [
+                            "21. Semântica: sentido próprio/figurado, sinônimos, antônimos",
+                            "22. Polissemia e ambiguidade",
+                            "23. Dicionários e Verbetes",
+                            "24. Vocabulário: neologismos, arcaísmos, estrangeirismos",
+                            "25. Ortografia oficial e acentuação gráfica"
+                        ]
+                    }
+                ]
+            },
+            {
+                id: 'matematica',
+                title: 'II. Matemática e Lógica',
+                short: 'Matemática',
+                color: '#3b82f6', // Blue 500
+                bg: 'bg-blue-50',
+                border: 'border-blue-200',
+                text: 'text-blue-700',
+                btn: 'bg-blue-600 hover:bg-blue-700',
+                topics: [
+                    {
+                        category: "Raciocínio Lógico Formal",
+                        items: [
+                            "1. Lógica proposicional: conectivos, equivalências, quantificadores",
+                            "6. Estrutura lógica de relações arbitrárias (dedução)",
+                            "7. Análise da lógica de situações (verbal, sequencial, espacial)",
+                            "13. Problemas gerais de lógica e raciocínio"
+                        ]
+                    },
+                    {
+                        category: "Conjuntos e Aritmética",
+                        items: [
+                            "2. Conjuntos: operações e diagramas",
+                            "3. Números (Z, Q, R): operações, porcentagem e juros",
+                            "4. Proporcionalidade direta e inversa",
+                            "10. Contagem e noções de probabilidade"
+                        ]
+                    },
+                    {
+                        category: "Geometria e Medidas",
+                        items: [
+                            "5. Medidas: comprimento, área, volume, massa, tempo",
+                            "11. Geometria básica: triângulos, polígonos, perímetro, área",
+                            "12. Plano cartesiano: coordenadas e distância"
+                        ]
+                    },
+                    {
+                        category: "Análise de Dados",
+                        items: [
+                            "8. Compreensão e análise de gráficos e tabelas",
+                            "9. Raciocínio lógico envolvendo matrizes e padrões geométricos"
+                        ]
+                    }
+                ]
+            },
+            {
+                id: 'especifica',
+                title: 'III. Conhecimentos Específicos (Eletrotécnica)',
+                short: 'Específicos',
+                color: '#f59e0b', // Amber 500
+                bg: 'bg-amber-50',
+                border: 'border-amber-200',
+                text: 'text-amber-700',
+                btn: 'bg-amber-600 hover:bg-amber-700',
+                topics: [
+                    {
+                        category: "Fundamentos e Circuitos",
+                        items: [
+                            "1. Medidas elétricas e instrumentos (multímetro, terrômetro, etc.)",
+                            "2. Análise de circuitos: Ohm, Kirchhoff, CC/CA, Potência",
+                            "6. Leitura e interpretação de diagramas elétricos (Unifilar, Multifilar)"
+                        ]
+                    },
+                    {
+                        category: "Equipamentos e Máquinas",
+                        items: [
+                            "3. Componentes: Disjuntores, Fusíveis, Relés, Transformadores",
+                            "4. Máquinas elétricas: Motores CA, Geradores e Acionamentos (Inversores, Soft-start)",
+                            "11. Sistemas de emergência: UPS, Geradores, Baterias"
+                        ]
+                    },
+                    {
+                        category: "Manutenção e Gestão",
+                        items: [
+                            "7. Práticas de manutenção: Preventiva, Corretiva, Preditiva (Termografia)",
+                            "8. Gestão da manutenção, CMMS e Documentação técnica",
+                            "9. Validação de serviços terceirizados e aceites técnicos"
+                        ]
+                    },
+                    {
+                        category: "Automação e Segurança",
+                        items: [
+                            "5. Instalações e Segurança: NBR 5410, Aterramento, SPDA, NR-10",
+                            "10. CLPs: Arquitetura e programação Ladder (IEC 61131)"
+                        ]
+                    }
+                ]
+            }
+        ];
+
+        // --- STATE MANAGEMENT ---
+        let activeTab = 'portugues';
+        // Check local storage or init empty
+        let userProgress = JSON.parse(localStorage.getItem('studyTrackerProgress')) || {};
+
+        // --- DOM ELEMENTS ---
+        const tabsContainer = document.getElementById('tabs-container');
+        const tabContent = document.getElementById('tab-content');
+        const globalPercentEl = document.getElementById('global-percent');
+        const globalSpinner = document.getElementById('global-spinner');
+
+        // --- CHART INSTANCES ---
+        let distributionChartInstance = null;
+        let progressChartInstance = null;
+
+        // --- CORE FUNCTIONS ---
+
+        function init() {
+            renderTabs();
+            renderContent();
+            updateStats();
+        }
+
+        // 1. Navigation Logic
+        function renderTabs() {
+            tabsContainer.innerHTML = '';
+            studyData.forEach(subject => {
+                const btn = document.createElement('button');
+                const isActive = activeTab === subject.id;
+                
+                let classes = `flex-1 py-4 px-2 text-sm sm:text-base font-semibold transition-colors duration-200 border-b-4 focus:outline-none `;
+                
+                if (isActive) {
+                    classes += `border-${subject.color.replace('#','')} ${subject.text} bg-white`;
+                    // Tailwind doesn't support arbitrary hex in border classes easily without JIT config in HTML, 
+                    // so we use inline style for the border color to be safe with the data object
+                    btn.style.borderBottomColor = subject.color;
+                    btn.style.color = subject.color;
+                } else {
+                    classes += `border-transparent text-stone-500 hover:text-stone-700 hover:bg-stone-50`;
+                }
+
+                btn.className = classes;
+                btn.textContent = subject.short;
+                btn.onclick = () => {
+                    activeTab = subject.id;
+                    renderTabs();
+                    renderContent();
+                };
+                tabsContainer.appendChild(btn);
+            });
+        }
+
+        // 2. Content Rendering (The List)
+        function renderContent() {
+            const subject = studyData.find(s => s.id === activeTab);
+            if (!subject) return;
+
+            tabContent.innerHTML = '';
+            
+            // Grid layout for categories
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-1 lg:grid-cols-2 gap-8';
+
+            subject.topics.forEach((category, catIndex) => {
+                const card = document.createElement('div');
+                card.className = `bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden flex flex-col`;
+                
+                // Category Header
+                const header = document.createElement('div');
+                header.className = `${subject.bg} p-4 border-b ${subject.border}`;
+                header.innerHTML = `<h3 class="font-bold ${subject.text}">${category.category}</h3>`;
+                card.appendChild(header);
+
+                // Items List
+                const list = document.createElement('ul');
+                list.className = 'divide-y divide-stone-100 p-2';
+
+                category.items.forEach((item, itemIndex) => {
+                    // Generate unique ID for storage
+                    const uniqueId = `${subject.id}-${catIndex}-${itemIndex}`;
+                    const isChecked = userProgress[uniqueId] || false;
+
+                    const li = document.createElement('li');
+                    li.className = 'p-3 hover:bg-stone-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3';
+
+                    // Text & Checkbox
+                    const leftDiv = document.createElement('div');
+                    leftDiv.className = 'flex items-start gap-3 flex-1';
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = uniqueId;
+                    checkbox.checked = isChecked;
+                    checkbox.className = `mt-1 w-5 h-5 rounded border-stone-300 text-${subject.color.replace('#','')} focus:ring-${subject.color.replace('#','')} cursor-pointer check-anim`;
+                    
+                    // Specific Color fix for checkbox (Tailwind CDN limit)
+                    checkbox.style.accentColor = subject.color;
+
+                    checkbox.onchange = (e) => toggleProgress(uniqueId, e.target.checked);
+
+                    const label = document.createElement('label');
+                    label.htmlFor = uniqueId;
+                    label.className = `text-sm text-stone-700 cursor-pointer ${isChecked ? 'line-through text-stone-400' : ''}`;
+                    label.textContent = item;
+
+                    leftDiv.appendChild(checkbox);
+                    leftDiv.appendChild(label);
+
+                    // Action Button
+                    const searchBtn = document.createElement('button');
+                    searchBtn.className = `text-xs px-3 py-1.5 rounded-full border border-stone-200 text-stone-500 hover:text-white hover:${subject.btn.split(' ')[0]} transition-colors whitespace-nowrap self-end sm:self-center flex items-center gap-1`;
+                    searchBtn.innerHTML = `<span>🔍</span> Aula`;
+                    searchBtn.title = "Buscar material de estudo no Google";
+                    searchBtn.onclick = () => searchTopic(item, subject.title);
+
+                    li.appendChild(leftDiv);
+                    li.appendChild(searchBtn);
+                    list.appendChild(li);
+                });
+
+                card.appendChild(list);
+                grid.appendChild(card);
+            });
+
+            tabContent.appendChild(grid);
+        }
+
+        // 3. Logic: Toggle Progress
+        function toggleProgress(id, status) {
+            userProgress[id] = status;
+            localStorage.setItem('studyTrackerProgress', JSON.stringify(userProgress));
+            
+            // Update UI line-through immediately
+            const label = document.querySelector(`label[for="${id}"]`);
+            if (label) {
+                if (status) {
+                    label.classList.add('line-through', 'text-stone-400');
+                } else {
+                    label.classList.remove('line-through', 'text-stone-400');
+                }
+            }
+            updateStats();
+        }
+
+        // 4. Logic: Search Feature
+        function searchTopic(topicName, context) {
+            // Remove numbers (e.g., "1. ")
+            const cleanTopic = topicName.replace(/^\d+\.\s*/, '');
+            // Construct query
+            const query = `aula vídeo resumo "${cleanTopic}" concurso ${context}`;
+            const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+            window.open(url, '_blank');
+        }
+
+        // 5. Logic: Analytics & Charts
+        function updateStats() {
+            // Calculate Stats
+            let totalItems = 0;
+            let completedItems = 0;
+            const subjectStats = [];
+
+            studyData.forEach(subject => {
+                let subTotal = 0;
+                let subComplete = 0;
+                subject.topics.forEach(cat => {
+                    cat.items.forEach((item, idx) => {
+                        const uid = `${subject.id}-${subject.topics.indexOf(cat)}-${idx}`;
+                        subTotal++;
+                        if (userProgress[uid]) subComplete++;
+                    });
+                });
+                totalItems += subTotal;
+                completedItems += subComplete;
+                subjectStats.push({ 
+                    label: subject.short, 
+                    total: subTotal, 
+                    done: subComplete,
+                    color: subject.color 
+                });
+            });
+
+            // Update Header Stats
+            const percent = totalItems === 0 ? 0 : Math.round((completedItems / totalItems) * 100);
+            globalPercentEl.textContent = `${percent}%`;
+            
+            // Update Spinner border color dynamically based on percent
+            const spinner = document.getElementById('global-spinner');
+            spinner.style.borderTopColor = percent < 30 ? '#ef4444' : percent < 70 ? '#f59e0b' : '#10b981';
+
+            renderCharts(subjectStats);
+        }
+
+        function renderCharts(stats) {
+            // Destroy existing charts to prevent overlap
+            if (distributionChartInstance) distributionChartInstance.destroy();
+            if (progressChartInstance) progressChartInstance.destroy();
+
+            // 1. Distribution Chart (Doughnut)
+            const ctxDist = document.getElementById('distributionChart').getContext('2d');
+            distributionChartInstance = new Chart(ctxDist, {
+                type: 'doughnut',
+                data: {
+                    labels: stats.map(s => s.label),
+                    datasets: [{
+                        data: stats.map(s => s.total),
+                        backgroundColor: stats.map(s => s.color),
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.label}: ${context.raw} Tópicos`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 2. Progress Chart (Bar)
+            const ctxProg = document.getElementById('progressChart').getContext('2d');
+            progressChartInstance = new Chart(ctxProg, {
+                type: 'bar',
+                data: {
+                    labels: stats.map(s => s.label),
+                    datasets: [
+                        {
+                            label: 'Concluído',
+                            data: stats.map(s => s.done),
+                            backgroundColor: stats.map(s => s.color),
+                            borderRadius: 4,
+                            stack: 'Stack 0',
+                        },
+                        {
+                            label: 'Pendente',
+                            data: stats.map(s => s.total - s.done),
+                            backgroundColor: '#e5e7eb', // Gray 200
+                            borderRadius: 4,
+                            stack: 'Stack 0',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, grid: { color: '#f3f4f6' } }
+                    },
+                    plugins: {
+                        legend: { display: false }, // Simple view
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.dataset.label}: ${context.raw}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initialize App
+        window.addEventListener('DOMContentLoaded', init);
+
+    </script>
+</body>
+</html>
